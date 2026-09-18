@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:streamsd/models/media_item.dart';
 import 'package:streamsd/services/m3u_parser.dart';
@@ -46,5 +48,13 @@ stream.m3u8
 ''', baseUri: Uri.parse('https://example.com/lists/main.m3u'));
     expect(result.single.group, 'News, World');
     expect(result.single.url, 'https://example.com/lists/stream.m3u8');
+  });
+
+  test('processa fluxo acima de 30 MB em partes sem rejeitar a entrada SD', () async {
+    final filler = utf8.encode('#${'x' * 65534}\n');
+    final parts = List<List<int>>.filled(512, filler, growable: true);
+    parts.add(utf8.encode('#EXTINF:-1 group-title="Canais",Teste SD\nhttps://example.com/sd.m3u8\n'));
+    final parser = await M3uParser.parseStream(Stream<List<int>>.fromIterable(parts));
+    expect(parser.items.single.name, 'Teste');
   });
 }

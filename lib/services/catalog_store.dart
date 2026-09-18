@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
@@ -11,7 +10,6 @@ import 'm3u_parser.dart';
 
 class CatalogStore {
   final _prefs = SharedPreferencesAsync();
-  static const maxBytes = 30 * 1024 * 1024;
   Uri? sourceUri;
   List<MediaItem> items = [];
   Set<String> favorites = {};
@@ -26,7 +24,7 @@ class CatalogStore {
     recent = await _prefs.getStringList('recent') ?? [];
     final file = await _cache;
     if (await file.exists()) {
-      try { items = M3uParser.parse(await file.readAsString(), baseUri: sourceUri); }
+      try { items = (await M3uParser.parseStream(file.openRead(), baseUri: sourceUri)).items; }
       catch (_) { items = []; }
     }
   }
@@ -41,35 +39,41 @@ class CatalogStore {
       final request = http.Request('GET', uri);
       final response = await client.send(request).timeout(const Duration(seconds: 25));
       if (response.statusCode != 200) throw HttpException('A lista respondeu HTTP ${response.statusCode}.');
-      final bytes = <int>[];
-      await for (final chunk in response.stream.timeout(const Duration(seconds: 25))) {
-        bytes.addAll(chunk);
-        if (bytes.length > maxBytes) throw const FormatException('Lista acima do limite de 30 MB.');
-      }
-      return _commit(utf8.decode(bytes, allowMalformed: true), uri);
+      return _commit(response.stream.timeout(const Duration(seconds: 25)), uri);
     } finally { client.close(); }
   }
 
   Future<int?> importFile() async {
     final file = await FilePicker.pickFile(type: FileType.custom, allowedExtensions: ['m3u', 'm3u8', 'txt']);
     if (file == null) return null;
-    final length = await file.length();
-    if (length != null && length > maxBytes) throw const FormatException('Lista acima do limite de 30 MB.');
-    final bytes = await file.readAsBytes();
-    if (bytes.length > maxBytes) throw const FormatException('Lista acima do limite de 30 MB.');
-    return _commit(utf8.decode(bytes, allowMalformed: true), null);
+    return _commit(file.readAsByteStream(), null);
   }
 
-  Future<int> _commit(String text, Uri? uri) async {
-    if (!text.contains('#EXTINF:')) throw const FormatException('Arquivo sem entradas M3U EXTINF.');
-    final parsed = M3uParser.parse(text, baseUri: uri);
-    // Não substitui o catálogo anterior se a importação não gerou entradas SD.
-    if (parsed.isEmpty) throw const FormatException('Nenhuma entrada SD identificada. Verifique os nomes e atributos da lista.');
-    await (await _cache).writeAsString(text, flush: true);
-    await _prefs.setString('sourceUrl', uri?.toString() ?? '');
-    sourceUri = uri;
-    items = parsed;
-    return parsed.length;
+  Future<int> _commit(Stream<List<int>> source, Uri? uri) async {
+    final saved = await _cache;
+    final incoming = File('${saved.path}.incoming');
+    final sink = incoming.openWrite();
+    try {
+      // Copia os bytes diretamente para o armazenamento do app, sem acumulá-los.
+      await sink.addStream(source);
+      await sink.flush();
+      await sink.close();
+      final parser = await M3uParser.parseStream(incoming.openRead(), baseUri: uri);
+      if (!parser.sawEntry) throw const FormatException('Arquivo sem entradas M3U EXTINF.');
+      if (parser.items.isEmpty) {
+        throw const FormatException('Nenhuma entrada SD identificada. Verifique os nomes e atributos da lista.');
+      }
+      // A lista anterior só é trocada depois do download e da validação.
+      await incoming.rename(saved.path);
+      await _prefs.setString('sourceUrl', uri?.toString() ?? '');
+      sourceUri = uri;
+      items = parser.items;
+      return items.length;
+    } catch (_) {
+      await sink.close();
+      if (await incoming.exists()) await incoming.delete();
+      rethrow;
+    }
   }
 
   Future<void> toggleFavorite(MediaItem item) async {
