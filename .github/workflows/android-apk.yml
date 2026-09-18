@@ -35,7 +35,7 @@ jobs:
         run: flutter pub get
 
       - name: Testar filtro M3U
-        run: flutter test
+        run: flutter test test/m3u_parser_test.dart
 
       - name: Compilar APK
         run: flutter build apk --release

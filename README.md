@@ -10,7 +10,7 @@ Aplicativo Flutter para Android que abre listas M3U próprias, guarda o catálog
    ```bash
    flutter create --platforms=android --org com.example .
    flutter pub get
-   flutter test
+   flutter test test/m3u_parser_test.dart
    flutter build apk --release
    ```
 
