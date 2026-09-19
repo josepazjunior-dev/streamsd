@@ -1,0 +1,10 @@
+<resources>
+    <style name="Theme.StreamPlayer" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:colorAccent">#008CFF</item>
+        <item name="android:navigationBarColor">#05070D</item>
+        <item name="android:statusBarColor">#05070D</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>
