@@ -15,6 +15,8 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
+import java.net.URI
+import javax.net.ssl.SSLException
 
 class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val prefs = app.getSharedPreferences("stream_player", Context.MODE_PRIVATE)
@@ -49,6 +51,76 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }.onFailure { _error.value = it.message ?: "Não foi possível importar a lista." }
         _busy.value = null
     }
+
+    private fun downloadPlaylist(rawUrl: String): String {
+        val original = rawUrl.trim()
+        require(original.startsWith("http://", true) || original.startsWith("https://", true)) {
+            "A URL deve começar com http:// ou https://"
+        }
+
+        var current = original
+        repeat(6) {
+            try {
+                val connection = (URL(current).openConnection() as HttpURLConnection).apply {
+                    instanceFollowRedirects = false
+                    connectTimeout = 15000
+                    readTimeout = 45000
+                    requestMethod = "GET"
+                    setRequestProperty("User-Agent", "Mozilla/5.0 (Android) StreamPlayer/1.1")
+                    setRequestProperty("Accept", "*/*")
+                    setRequestProperty("Accept-Encoding", "identity")
+                    setRequestProperty("Connection", "close")
+                }
+
+                val code = connection.responseCode
+                if (code in 200..299) {
+                    return connection.inputStream.bufferedReader().use { it.readText() }
+                }
+
+                if (code in 300..399) {
+                    val location = connection.getHeaderField("Location")
+                        ?: error("O servidor redirecionou a lista sem informar o novo endereço.")
+                    val redirected = URI(current).resolve(location).toString()
+                    val from = URI(current)
+                    val to = URI(redirected)
+                    current = if (
+                        from.scheme.equals("http", true) &&
+                        to.scheme.equals("https", true) &&
+                        from.host.equals(to.host, true) &&
+                        effectivePort(from) == effectivePort(to)
+                    ) {
+                        redirected.replaceFirst(Regex("^https://", RegexOption.IGNORE_CASE), "http://")
+                    } else {
+                        redirected
+                    }
+                    return@repeat
+                }
+
+                val errorText = connection.errorStream?.bufferedReader()?.use { it.readText() }.orEmpty()
+                error("Servidor retornou HTTP " + code + if (errorText.isNotBlank()) ": " + errorText.take(160) else "")
+            } catch (e: SSLException) {
+                if (current.startsWith("https://", true)) {
+                    current = current.replaceFirst(Regex("^https://", RegexOption.IGNORE_CASE), "http://")
+                    return@repeat
+                }
+                throw e
+            } catch (e: java.io.IOException) {
+                val msg = e.message.orEmpty()
+                if (
+                    current.startsWith("https://", true) &&
+                    (msg.contains("TLS", true) || msg.contains("SSL", true) || msg.contains("packet header", true))
+                ) {
+                    current = current.replaceFirst(Regex("^https://", RegexOption.IGNORE_CASE), "http://")
+                    return@repeat
+                }
+                throw e
+            }
+        }
+        error("Muitos redirecionamentos ao tentar baixar a lista.")
+    }
+
+    private fun effectivePort(uri: URI): Int =
+        if (uri.port != -1) uri.port else if (uri.scheme.equals("https", true)) 443 else 80
 
     fun addFile(name: String, uri: Uri) = viewModelScope.launch {
         _busy.value = "Processando arquivo..."
