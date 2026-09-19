@@ -51,7 +51,7 @@ class CatalogStore {
       throw const FormatException('Informe uma URL http ou https válida.');
     }
 
-    Object? lastError;
+    String lastError = 'falha de conexão';
     for (var attempt = 1; attempt <= 3; attempt++) {
       final client = http.Client();
       try {
@@ -61,60 +61,38 @@ class CatalogStore {
           originalUri,
         );
       } on http.ClientException catch (e) {
-        lastError = e;
+        lastError = e.message;
         if (attempt == 3) {
           throw const HttpException(
             'O servidor fechou a conexão antes de terminar a lista. Tente novamente em alguns instantes.',
           );
         }
-        await Future<void>.delayed(Duration(seconds: attempt));
       } on TimeoutException {
-        lastError = const TimeoutException('timeout');
+        lastError = 'tempo limite excedido';
         if (attempt == 3) {
           throw const HttpException(
             'O servidor demorou demais para responder. Tente novamente.',
           );
         }
-        await Future<void>.delayed(Duration(seconds: attempt));
       } on HandshakeException {
         throw const HttpException(
           'O servidor da lista respondeu com SSL/TLS incompatível. Tente novamente; o app já tentou corrigir redirecionamentos HTTPS incorretos.',
         );
-      } on SocketException {
-        lastError = const SocketException('connection failed');
+      } on SocketException catch (e) {
+        lastError = e.message;
         if (attempt == 3) {
           throw const HttpException(
             'Não foi possível manter conexão com o servidor da lista.',
           );
         }
-        await Future<void>.delayed(Duration(seconds: attempt));
       } finally {
         client.close();
       }
-    }
-    throw HttpException('Falha ao importar a lista: $lastError');
-  }
 
-  Future<int> _legacyImportUrlUnused(Uri originalUri) async {
-    final client = http.Client();
-    try {
-      final result = await _openPlaylist(client, originalUri);
-      return _commit(
-        result.response.stream.timeout(const Duration(minutes: 2)),
-        originalUri,
-      );
-    } on TimeoutException {
-      throw const HttpException(
-          'O servidor demorou demais para responder. Tente novamente.');
-    } on HandshakeException {
-      throw const HttpException(
-          'O servidor da lista respondeu com SSL/TLS incompatível. Tente novamente; o app já tentou corrigir redirecionamentos HTTPS incorretos.');
-    } on SocketException {
-      throw const HttpException(
-          'Não foi possível conectar ao servidor da lista.');
-    } finally {
-      client.close();
+      await Future<void>.delayed(Duration(seconds: attempt));
     }
+
+    throw HttpException('Falha ao importar a lista: $lastError');
   }
 
   Future<_PlaylistResponse> _openPlaylist(
