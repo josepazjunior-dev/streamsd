@@ -253,6 +253,22 @@ class CatalogStore {
     items = [];
     recent = [];
   }
+
+  Future<void> deleteCurrentList() async {
+    final file = await _cache;
+    final incoming = File('${file.path}.incoming');
+    if (await file.exists()) await file.delete();
+    if (await incoming.exists()) await incoming.delete();
+
+    await _prefs.remove('sourceUrl');
+    await _prefs.remove('recent');
+    await _prefs.remove('favorites');
+
+    sourceUri = null;
+    items = [];
+    recent = [];
+    favorites = {};
+  }
 }
 
 class _PlaylistResponse {
