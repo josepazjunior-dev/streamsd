@@ -23,17 +23,6 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Ensure Android SDK 35
-        run: |
-          SDKMANAGER="$ANDROID_HOME/cmdline-tools/16.0/bin/sdkmanager"
-          test -x "$SDKMANAGER"
-          if [ ! -d "$ANDROID_HOME/platforms/android-35" ]; then
-            yes | "$SDKMANAGER" "platforms;android-35"
-          fi
-          if [ ! -d "$ANDROID_HOME/build-tools/35.0.0" ]; then
-            yes | "$SDKMANAGER" "build-tools;35.0.0"
-          fi
-
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.11.1'
