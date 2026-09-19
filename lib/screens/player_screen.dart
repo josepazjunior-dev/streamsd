@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
 
 import '../models/media_item.dart';
+import '../services/catalog_store.dart';
 
 class PlayerScreen extends StatefulWidget {
   const PlayerScreen({super.key, required this.item});
@@ -21,7 +22,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
   void initState() {
     super.initState();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-    controller = VideoPlayerController.networkUrl(Uri.parse(widget.item.url));
+    controller = VideoPlayerController.networkUrl(
+      Uri.parse(widget.item.url),
+      httpHeaders: CatalogStore.requestHeaders,
+    );
     controller.addListener(_onUpdate);
     _start();
   }

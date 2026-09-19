@@ -57,19 +57,21 @@ class M3uParser {
       final namePart = _afterMetadataComma(metadata).trim();
       final rawName = namePart.isEmpty ? (attrs['tvg-name'] ?? '') : namePart;
       final group = attrs['group-title'] ?? 'Outros';
-      // Usa metadados textuais, mas ignora a URL do logo: o nome do arquivo
-      // de imagem não informa a qualidade do vídeo.
-      final labels = '$rawName ${attrs.entries.where((e) => e.key != 'tvg-logo').map((e) => e.value).join(' ')}';
-      if (_higher.hasMatch(labels) || !_sd.hasMatch(labels)) return;
-      final cleanName = rawName.replaceAll(_clean, '').replaceAll(RegExp(r'\s*[\[\](){}|]+\s*'), ' ').replaceAll(RegExp(r'\s{2,}'), ' ').trim();
-      if (cleanName.isEmpty) return;
-      final resolved = baseUri?.resolve(line) ?? Uri.tryParse(line);
-      if (resolved == null || !{'http', 'https'}.contains(resolved.scheme)) return;
       final groupLower = group.toLowerCase();
       final kind = RegExp(r's[ée]ries|series|temporada|epis[oó]dio|tv shows').hasMatch(groupLower)
           ? MediaKind.series
           : RegExp(r'filmes|movies|cinema|vod').hasMatch(groupLower)
               ? MediaKind.movie : MediaKind.channel;
+      // A exigência de SD vale para TV ao vivo. Muitos provedores deixam a
+      // versão SD sem etiqueta; por isso ela é aceita quando não há marcador
+      // de alta definição. Filmes e séries não são descartados por resolução.
+      // A URL do logo é ignorada porque o nome do arquivo não define qualidade.
+      final labels = '$rawName ${attrs.entries.where((e) => e.key != 'tvg-logo').map((e) => e.value).join(' ')}';
+      if (kind == MediaKind.channel && _higher.hasMatch(labels)) return;
+      final cleanName = rawName.replaceAll(_clean, '').replaceAll(RegExp(r'\s*[\[\](){}|]+\s*'), ' ').replaceAll(RegExp(r'\s{2,}'), ' ').trim();
+      if (cleanName.isEmpty) return;
+      final resolved = baseUri?.resolve(line) ?? Uri.tryParse(line);
+      if (resolved == null || !{'http', 'https'}.contains(resolved.scheme)) return;
       final item = MediaItem(name: cleanName, group: group.replaceAll(_clean, '').trim(),
         url: resolved.toString(), image: attrs['tvg-logo'] ?? '', kind: kind);
       if (_seen.add(item.id)) items.add(item);

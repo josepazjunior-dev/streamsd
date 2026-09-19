@@ -32,8 +32,8 @@ Na tela inicial, toque em adicionar lista, cole uma URL `http(s)` ou selecione u
 
 ## Limites do filtro SD
 
-- Só entram itens cujo **nome, grupo ou atributos** declarem `SD`, `480p` ou `576p`. Entradas sem indicação são descartadas.
-- Se nome, grupo ou atributos também contiverem `HD`, `FHD`, `Full HD`, `HDTV`, `720`, `1080`, `1440`, `2160`, `4K`, `8K` ou `UHD`, o item é descartado. Uma entrada SD duplicada é mostrada uma vez por nome/grupo/tipo.
+- Na TV ao vivo, entradas marcadas como `HD`, `FHD`, `Full HD`, `HDTV`, `720`, `1080`, `1440`, `2160`, `4K`, `8K` ou `UHD` são descartadas. Canais marcados como `SD`, `480p` ou `576p` e canais sem marcador de qualidade são aceitos, porque muitos provedores deixam a versão SD sem etiqueta. Filmes e séries não são descartados por resolução.
+- Links Xtream no formato `http(s)://servidor/get.php?username=...&password=...&type=m3u_plus&output=mpegts` são aceitos diretamente. O app envia cabeçalhos compatíveis e aguarda até dois minutos sem tráfego antes de considerar a conexão interrompida.
 - M3U não comprova resolução real. Se o servidor rotular um vídeo HD como SD, o aplicativo não consegue detectá-lo. Uma URL HLS com variantes adaptativas também pode alternar de qualidade; esta versão não reescreve manifestos para travar a variante SD.
 - O player usa o pacote `video_player`, que no Android usa ExoPlayer. A reprodução depende dos formatos e da disponibilidade do servidor; não há suporte a DRM, EPG, login do provedor nem cabeçalhos personalizados.
 - A interface e o catálogo funcionam offline; reprodução, atualização e imagens remotas dependem de conexão. A opção “limpar catálogo local” apaga a lista copiada e o histórico, mantendo favoritos. A importação é feita em partes, sem limite fixo de 30 MB; listas muito grandes dependem do espaço livre e da memória disponível no aparelho para exibir os itens filtrados.

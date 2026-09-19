@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
@@ -9,6 +10,10 @@ import '../models/media_item.dart';
 import 'm3u_parser.dart';
 
 class CatalogStore {
+  static const requestHeaders = <String, String>{
+    'User-Agent': 'Mozilla/5.0 (Android) StreamSD/1.1',
+    'Accept': 'audio/x-mpegurl, application/vnd.apple.mpegurl, text/plain, */*',
+  };
   final _prefs = SharedPreferencesAsync();
   Uri? sourceUri;
   List<MediaItem> items = [];
@@ -37,9 +42,14 @@ class CatalogStore {
     final client = http.Client();
     try {
       final request = http.Request('GET', uri);
-      final response = await client.send(request).timeout(const Duration(seconds: 25));
+      request.headers.addAll(requestHeaders);
+      final response = await client.send(request).timeout(const Duration(minutes: 2));
       if (response.statusCode != 200) throw HttpException('A lista respondeu HTTP ${response.statusCode}.');
-      return _commit(response.stream.timeout(const Duration(seconds: 25)), uri);
+      return _commit(response.stream.timeout(const Duration(minutes: 2)), uri);
+    } on TimeoutException {
+      throw const HttpException('O servidor demorou demais para responder. Tente novamente.');
+    } on SocketException {
+      throw const HttpException('Não foi possível conectar ao servidor da lista.');
     } finally { client.close(); }
   }
 

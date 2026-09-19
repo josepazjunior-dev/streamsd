@@ -23,12 +23,13 @@ https://example.com/ep1.mp4
 https://example.com/ep2.mp4
 ''';
     final result = M3uParser.parse(list);
-    expect(result.length, 4);
+    expect(result.length, 5);
     expect(result.first.name, 'Arena');
     expect(result.first.image, 'https://example.com/a.png');
-    expect(result[1].kind, MediaKind.movie);
-    expect(result[2].kind, MediaKind.series);
-    expect(result[3].name, 'Drama S01E02');
+    expect(result[1].name, 'Informativo');
+    expect(result[2].kind, MediaKind.movie);
+    expect(result[3].kind, MediaKind.series);
+    expect(result[4].name, 'Drama S01E02');
   });
 
   test('não aprova entrada com SD e variante HD simultaneamente', () {
@@ -39,6 +40,18 @@ https://example.com/hd.m3u8
 https://example.com/sd.m3u8
 ''');
     expect(result.map((e) => e.name).toList(), ['Outro']);
+  });
+
+  test('aceita canal sem marcador como provável SD e mantém filmes HD', () {
+    final result = M3uParser.parse('''#EXTM3U
+#EXTINF:-1 group-title="TV",Canal aberto
+http://example.com/live.ts
+#EXTINF:-1 group-title="TV",Canal aberto HD
+http://example.com/live-hd.ts
+#EXTINF:-1 group-title="Filmes",Filme FHD
+http://example.com/movie.mp4
+''');
+    expect(result.map((e) => e.name).toList(), ['Canal aberto', 'Filme FHD']);
   });
 
   test('ignora vírgula entre aspas e resolve caminhos relativos', () {
