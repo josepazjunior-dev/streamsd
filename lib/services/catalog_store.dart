@@ -11,7 +11,7 @@ import 'm3u_parser.dart';
 
 class CatalogStore {
   static const requestHeaders = <String, String>{
-    'User-Agent': 'Mozilla/5.0 (Android) StreamSD/1.1',
+    'User-Agent': 'Mozilla/5.0 (Android) StreamSD/1.2',
     'Accept': 'audio/x-mpegurl, application/vnd.apple.mpegurl, text/plain, */*',
   };
   final _prefs = SharedPreferencesAsync();
@@ -42,35 +42,100 @@ class CatalogStore {
   }
 
   Future<int> importUrl(String value) async {
-    final uri = Uri.tryParse(value.trim());
-    if (uri == null ||
-        !{'http', 'https'}.contains(uri.scheme) ||
-        uri.host.isEmpty) {
+    final originalUri = Uri.tryParse(value.trim());
+    if (originalUri == null ||
+        !{'http', 'https'}.contains(originalUri.scheme) ||
+        originalUri.host.isEmpty) {
       throw const FormatException('Informe uma URL http ou https válida.');
     }
+
     final client = http.Client();
     try {
-      final request = http.Request('GET', uri);
-      request.headers.addAll(requestHeaders);
-      final response =
-          await client.send(request).timeout(const Duration(minutes: 2));
-      if (response.statusCode != 200) {
-        throw HttpException(
-            'A lista respondeu HTTP ${response.statusCode}.');
-      }
+      final result = await _openPlaylist(client, originalUri);
       return _commit(
-        response.stream.timeout(const Duration(minutes: 2)),
-        uri,
+        result.response.stream.timeout(const Duration(minutes: 2)),
+        originalUri,
       );
     } on TimeoutException {
       throw const HttpException(
           'O servidor demorou demais para responder. Tente novamente.');
+    } on HandshakeException {
+      throw const HttpException(
+          'O servidor da lista respondeu com SSL/TLS incompatível. Tente novamente; o app já tentou corrigir redirecionamentos HTTPS incorretos.');
     } on SocketException {
       throw const HttpException(
           'Não foi possível conectar ao servidor da lista.');
     } finally {
       client.close();
     }
+  }
+
+  Future<_PlaylistResponse> _openPlaylist(
+      http.Client client, Uri originalUri) async {
+    var current = originalUri;
+    final visited = <String>{};
+
+    for (var redirects = 0; redirects < 8; redirects++) {
+      if (!visited.add(current.toString())) {
+        throw const HttpException('O servidor entrou em um loop de redirecionamento.');
+      }
+
+      http.StreamedResponse response;
+      try {
+        response = await _sendWithoutRedirect(client, current);
+      } on HandshakeException {
+        // Alguns painéis Xtream redirecionam de http://host:porta para
+        // https://host:mesma-porta, embora aquela porta aceite apenas HTTP.
+        // Nesse caso o Android retorna WRONG_VERSION_NUMBER. Se isso acontecer,
+        // voltamos para HTTP mantendo host, porta, caminho e parâmetros.
+        if (current.scheme == 'https') {
+          final fallback = current.replace(scheme: 'http');
+          if (!visited.contains(fallback.toString())) {
+            current = fallback;
+            continue;
+          }
+        }
+        rethrow;
+      }
+
+      if (response.statusCode == 200) {
+        return _PlaylistResponse(response, current);
+      }
+
+      if (response.isRedirect) {
+        final location = response.headers['location'];
+        if (location == null || location.trim().isEmpty) {
+          throw HttpException(
+              'O servidor respondeu com redirecionamento sem destino.');
+        }
+
+        var next = current.resolve(location.trim());
+
+        // Corrige o caso comum de painel que força HTTPS na mesma porta HTTP.
+        if (current.scheme == 'http' &&
+            next.scheme == 'https' &&
+            next.host == current.host &&
+            next.port == current.port) {
+          next = next.replace(scheme: 'http');
+        }
+
+        current = next;
+        continue;
+      }
+
+      throw HttpException(
+          'A lista respondeu HTTP ${response.statusCode}.');
+    }
+
+    throw const HttpException('O servidor redirecionou a lista muitas vezes.');
+  }
+
+  Future<http.StreamedResponse> _sendWithoutRedirect(
+      http.Client client, Uri uri) async {
+    final request = http.Request('GET', uri)
+      ..followRedirects = false
+      ..headers.addAll(requestHeaders);
+    return client.send(request).timeout(const Duration(minutes: 2));
   }
 
   Future<int?> importFile() async {
@@ -94,14 +159,11 @@ class CatalogStore {
     var sinkClosed = false;
 
     try {
-      // Grava em fluxo para suportar listas grandes sem carregar o arquivo
-      // inteiro na memória.
       await sink.addStream(source);
       await sink.flush();
       await sink.close();
       sinkClosed = true;
 
-      // Só começa a leitura depois que a gravação foi encerrada de verdade.
       final parser = await M3uParser.parseStream(
         incoming.openRead(),
         baseUri: uri,
@@ -116,8 +178,6 @@ class CatalogStore {
         );
       }
 
-      // No Android, substituir explicitamente o cache evita falha de rename
-      // quando já existe uma playlist anterior.
       if (await saved.exists()) {
         await saved.delete();
       }
@@ -136,16 +196,12 @@ class CatalogStore {
       if (!sinkClosed) {
         try {
           await sink.close();
-        } catch (_) {
-          // Evita mascarar o erro original com "File closed".
-        }
+        } catch (_) {}
       }
       if (await incoming.exists()) {
         try {
           await incoming.delete();
-        } catch (_) {
-          // A limpeza é secundária; preserva o erro real da importação.
-        }
+        } catch (_) {}
       }
       rethrow;
     }
@@ -172,4 +228,11 @@ class CatalogStore {
     items = [];
     recent = [];
   }
+}
+
+class _PlaylistResponse {
+  const _PlaylistResponse(this.response, this.effectiveUri);
+
+  final http.StreamedResponse response;
+  final Uri effectiveUri;
 }
