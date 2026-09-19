@@ -23,13 +23,16 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Verify Android SDK
+      - name: Ensure Android SDK 35
         run: |
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          sdkmanager --list_installed | head -80
-
-      - name: Install Android 35
-        run: yes | sdkmanager "platforms;android-35" "build-tools;35.0.0"
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/16.0/bin/sdkmanager"
+          test -x "$SDKMANAGER"
+          if [ ! -d "$ANDROID_HOME/platforms/android-35" ]; then
+            yes | "$SDKMANAGER" "platforms;android-35"
+          fi
+          if [ ! -d "$ANDROID_HOME/build-tools/35.0.0" ]; then
+            yes | "$SDKMANAGER" "build-tools;35.0.0"
+          fi
 
       - uses: gradle/actions/setup-gradle@v4
         with:
