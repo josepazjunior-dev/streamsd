@@ -1,7 +1,7 @@
 name: streamsd
 description: Catálogo M3U pessoal com seleção de entradas SD.
 publish_to: none
-version: 1.1.1+3
+version: 1.2.0+4
 
 environment:
   sdk: '>=3.5.0 <4.0.0'
