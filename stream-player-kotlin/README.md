@@ -22,3 +22,5 @@ gradle :app:assembleDebug
 APK: `app/build/outputs/apk/debug/app-debug.apk`
 
 No GitHub, abra **Actions > Stream Player Android APK > Run workflow** e baixe o artifact **stream-player-debug-apk**.
+
+CI validation configured for Android SDK 35.
