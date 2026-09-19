@@ -13,6 +13,8 @@ class CatalogStore {
   static const requestHeaders = <String, String>{
     'User-Agent': 'Mozilla/5.0 (Android) StreamSD/1.2',
     'Accept': 'audio/x-mpegurl, application/vnd.apple.mpegurl, text/plain, */*',
+    'Accept-Encoding': 'identity',
+    'Connection': 'close',
   };
   final _prefs = SharedPreferencesAsync();
   Uri? sourceUri;
@@ -49,6 +51,51 @@ class CatalogStore {
       throw const FormatException('Informe uma URL http ou https válida.');
     }
 
+    Object? lastError;
+    for (var attempt = 1; attempt <= 3; attempt++) {
+      final client = http.Client();
+      try {
+        final result = await _openPlaylist(client, originalUri);
+        return await _commit(
+          result.response.stream.timeout(const Duration(minutes: 5)),
+          originalUri,
+        );
+      } on http.ClientException catch (e) {
+        lastError = e;
+        if (attempt == 3) {
+          throw const HttpException(
+            'O servidor fechou a conexão antes de terminar a lista. Tente novamente em alguns instantes.',
+          );
+        }
+        await Future<void>.delayed(Duration(seconds: attempt));
+      } on TimeoutException {
+        lastError = const TimeoutException('timeout');
+        if (attempt == 3) {
+          throw const HttpException(
+            'O servidor demorou demais para responder. Tente novamente.',
+          );
+        }
+        await Future<void>.delayed(Duration(seconds: attempt));
+      } on HandshakeException {
+        throw const HttpException(
+          'O servidor da lista respondeu com SSL/TLS incompatível. Tente novamente; o app já tentou corrigir redirecionamentos HTTPS incorretos.',
+        );
+      } on SocketException {
+        lastError = const SocketException('connection failed');
+        if (attempt == 3) {
+          throw const HttpException(
+            'Não foi possível manter conexão com o servidor da lista.',
+          );
+        }
+        await Future<void>.delayed(Duration(seconds: attempt));
+      } finally {
+        client.close();
+      }
+    }
+    throw HttpException('Falha ao importar a lista: $lastError');
+  }
+
+  Future<int> _legacyImportUrlUnused(Uri originalUri) async {
     final client = http.Client();
     try {
       final result = await _openPlaylist(client, originalUri);
