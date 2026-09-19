@@ -5,8 +5,11 @@ import 'services/catalog_store.dart';
 
 void main() { WidgetsFlutterBinding.ensureInitialized(); runApp(const StreamSdApp()); }
 
-const accent = Color(0xFFE73856);
-const surface = Color(0xFF0B0D14);
+const accent = Color(0xFF19A7FF);
+const accent2 = Color(0xFF635BFF);
+const surface = Color(0xFF080B12);
+const panel = Color(0xFF111722);
+const panel2 = Color(0xFF171E2C);
 
 class StreamSdApp extends StatelessWidget {
   const StreamSdApp({super.key});
@@ -16,8 +19,27 @@ class StreamSdApp extends StatelessWidget {
     theme: ThemeData.dark(useMaterial3: true).copyWith(
       scaffoldBackgroundColor: surface,
       colorScheme: const ColorScheme.dark(primary: accent, surface: surface),
-      appBarTheme: const AppBarTheme(backgroundColor: surface),
-      navigationBarTheme: const NavigationBarThemeData(backgroundColor: Color(0xFF151722)),
+      appBarTheme: const AppBarTheme(
+        backgroundColor: surface,
+        centerTitle: false,
+        elevation: 0,
+      ),
+      navigationBarTheme: const NavigationBarThemeData(
+        backgroundColor: panel,
+        indicatorColor: Color(0x3328B8FF),
+        labelTextStyle: WidgetStatePropertyAll(
+          TextStyle(fontWeight: FontWeight.w700),
+        ),
+      ),
+      cardTheme: const CardThemeData(color: panel),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: panel2,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide.none,
+        ),
+      ),
     ),
     home: const HomeScreen(),
   );
@@ -97,21 +119,121 @@ class _HomeScreenState extends State<HomeScreen> {
     showSearch<MediaItem?>(context: context, delegate: _MediaSearch(catalog.items, _open));
   }
 
+  Future<void> _confirmDeleteList(BuildContext settingsContext) async {
+    if (catalog.items.isEmpty) {
+      _message('Nenhuma lista carregada para excluir.');
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: settingsContext,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: panel,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        title: const Row(children: [
+          Icon(Icons.delete_forever_rounded, color: Colors.redAccent),
+          SizedBox(width: 10),
+          Expanded(child: Text('Excluir lista atual?')),
+        ]),
+        content: const Text(
+          'Tem certeza que deseja excluir a lista atual? Todos os canais, filmes, séries, favoritos e histórico desta lista serão removidos do aparelho.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.redAccent),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Excluir lista'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+    await catalog.deleteCurrentList();
+    if (!mounted) return;
+    setState(() {
+      tab = 0;
+      loadError = null;
+    });
+    if (settingsContext.mounted) Navigator.pop(settingsContext);
+    _message('Lista excluída do aparelho.');
+  }
+
   void _settings() {
     Navigator.push(context, MaterialPageRoute<void>(builder: (settingsContext) => Scaffold(
       appBar: AppBar(title: const Text('Configurações')),
-      body: ListView(children: [
-        ListTile(leading: const Icon(Icons.playlist_add), title: const Text('Adicionar ou atualizar lista'), onTap: () { Navigator.pop(settingsContext); _showImport(); }),
-        ListTile(leading: const Icon(Icons.delete_outline), title: const Text('Limpar cache e catálogo'),
-          subtitle: const Text('Remove a lista e o histórico; mantém favoritos.'), onTap: () async {
-            await catalog.clearCache(); if (!mounted) return;
-            setState(() {}); Navigator.pop(settingsContext); _message('Catálogo local removido.');
-          }),
-        const ListTile(leading: Icon(Icons.info_outline), title: Text('Sobre o StreamSD'),
-          subtitle: Text('Catálogo pessoal M3U • seleção por identificação SD • reprodução via player do Android.')),
-      ]),
+      body: ListView(
+        padding: const EdgeInsets.all(14),
+        children: [
+          _settingsTile(
+            icon: Icons.playlist_add_rounded,
+            title: 'Adicionar ou atualizar lista',
+            subtitle: 'Carregue um link M3U/Xtream ou um arquivo local.',
+            onTap: () { Navigator.pop(settingsContext); _showImport(); },
+          ),
+          const SizedBox(height: 10),
+          _settingsTile(
+            icon: Icons.delete_forever_rounded,
+            iconColor: Colors.redAccent,
+            title: 'Excluir lista atual',
+            subtitle: 'Remove completamente a lista, favoritos e histórico.',
+            onTap: () => _confirmDeleteList(settingsContext),
+          ),
+          const SizedBox(height: 10),
+          _settingsTile(
+            icon: Icons.cleaning_services_outlined,
+            title: 'Limpar cache e catálogo',
+            subtitle: 'Remove a lista e o histórico; mantém favoritos.',
+            onTap: () async {
+              await catalog.clearCache();
+              if (!mounted) return;
+              setState(() {});
+              if (settingsContext.mounted) Navigator.pop(settingsContext);
+              _message('Catálogo local removido.');
+            },
+          ),
+          const SizedBox(height: 10),
+          const Card(
+            child: ListTile(
+              leading: Icon(Icons.info_outline_rounded, color: accent),
+              title: Text('Sobre o StreamSD'),
+              subtitle: Text('Catálogo M3U pessoal • canais SD • filmes e séries • reprodução no Android.'),
+            ),
+          ),
+        ],
+      ),
     )));
   }
+
+  Widget _settingsTile({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+    Color? iconColor,
+  }) => Card(
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+    child: ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      leading: Container(
+        width: 44,
+        height: 44,
+        decoration: BoxDecoration(
+          color: (iconColor ?? accent).withValues(alpha: .12),
+          borderRadius: BorderRadius.circular(13),
+        ),
+        child: Icon(icon, color: iconColor ?? accent),
+      ),
+      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
+      subtitle: Text(subtitle),
+      trailing: const Icon(Icons.chevron_right_rounded),
+      onTap: onTap,
+    ),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -120,11 +242,15 @@ class _HomeScreenState extends State<HomeScreen> {
     for (final item in items) { groups.putIfAbsent(item.group, () => []).add(item); }
     final featured = items.isEmpty ? null : items.first;
     return Scaffold(
-      appBar: AppBar(title: const Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(Icons.play_circle_fill, color: accent, size: 30), SizedBox(width: 8),
-        Text('Stream', style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: -.6)),
-        Text('SD', style: TextStyle(color: accent, fontWeight: FontWeight.w900)),
-      ]), actions: [
+      appBar: AppBar(
+        titleSpacing: 16,
+        title: const Row(mainAxisSize: MainAxisSize.min, children: [
+          _BrandMark(),
+          SizedBox(width: 10),
+          Text('Stream', style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: -.6)),
+          Text('SD', style: TextStyle(color: accent, fontWeight: FontWeight.w900)),
+        ]),
+        actions: [
         IconButton(tooltip: 'Buscar', onPressed: _search, icon: const Icon(Icons.search)),
         IconButton(tooltip: 'Adicionar lista', onPressed: _showImport, icon: const Icon(Icons.playlist_add)),
         IconButton(tooltip: 'Configurações', onPressed: _settings, icon: const Icon(Icons.settings_outlined)),
@@ -151,8 +277,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _empty() => Center(child: Padding(padding: const EdgeInsets.all(28), child: Column(
     mainAxisSize: MainAxisSize.min, children: [
-      const Icon(Icons.video_library_outlined, color: accent, size: 78),
-      const SizedBox(height: 20),
+      const _BrandMark(size: 82),
+      const SizedBox(height: 24),
       Text(catalog.items.isEmpty ? 'Seu catálogo começa aqui' : 'Nenhum item nesta aba',
         style: const TextStyle(fontSize: 23, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
       const SizedBox(height: 10),
@@ -165,8 +291,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _hero(MediaItem item) => Container(
     height: 220, margin: const EdgeInsets.fromLTRB(16, 12, 16, 14),
-    decoration: BoxDecoration(borderRadius: BorderRadius.circular(20), gradient: const LinearGradient(
-      colors: [Color(0xFF682137), Color(0xFF171923)], begin: Alignment.topLeft, end: Alignment.bottomRight)),
+    decoration: BoxDecoration(
+      borderRadius: BorderRadius.circular(22),
+      gradient: const LinearGradient(
+        colors: [Color(0xFF0C5AA6), Color(0xFF25235F), Color(0xFF111722)],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      ),
+      border: Border.all(color: Colors.white10),
+      boxShadow: const [BoxShadow(color: Colors.black38, blurRadius: 18, offset: Offset(0, 8))],
+    ),
     child: Stack(fit: StackFit.expand, children: [
       if (item.image.isNotEmpty) ClipRRect(borderRadius: BorderRadius.circular(20), child: Image.network(item.image,
         fit: BoxFit.cover, errorBuilder: (context, error, stack) => const SizedBox.shrink())),
@@ -197,11 +331,33 @@ class _HomeScreenState extends State<HomeScreen> {
     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Expanded(child: Stack(children: [
         InkWell(onTap: () => _open(item), borderRadius: BorderRadius.circular(12),
-          child: Container(width: double.infinity, decoration: BoxDecoration(color: const Color(0xFF232734), borderRadius: BorderRadius.circular(12)),
+          child: Container(width: double.infinity, decoration: BoxDecoration(
+            color: panel2,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Colors.white10),
+          ),
             clipBehavior: Clip.antiAlias,
             child: item.image.isNotEmpty ? Image.network(item.image, fit: BoxFit.cover,
               errorBuilder: (context, error, stack) => const Icon(Icons.play_circle_outline, size: 44, color: Colors.white54))
               : const Icon(Icons.play_circle_outline, size: 44, color: Colors.white54))),
+        Positioned(
+          top: 0,
+          left: 0,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: const BoxDecoration(
+              color: accent,
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(14),
+                bottomRight: Radius.circular(10),
+              ),
+            ),
+            child: Text(
+              item.kind == MediaKind.channel ? 'SD' : (item.kind == MediaKind.movie ? 'FILME' : 'SÉRIE'),
+              style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: .4),
+            ),
+          ),
+        ),
         Positioned(top: 2, right: 2, child: IconButton.filledTonal(
           constraints: const BoxConstraints(minWidth: 34, minHeight: 34), padding: EdgeInsets.zero,
           tooltip: catalog.favorites.contains(item.id) ? 'Desfavoritar' : 'Favoritar',
@@ -212,6 +368,30 @@ class _HomeScreenState extends State<HomeScreen> {
       const SizedBox(height: 7), Text(item.name, maxLines: 2, overflow: TextOverflow.ellipsis,
         style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
     ])));
+}
+
+class _BrandMark extends StatelessWidget {
+  const _BrandMark({this.size = 34});
+
+  final double size;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: size,
+    height: size,
+    decoration: BoxDecoration(
+      gradient: const LinearGradient(
+        colors: [accent, accent2],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      ),
+      borderRadius: BorderRadius.circular(size * .28),
+      boxShadow: const [
+        BoxShadow(color: Color(0x4428B8FF), blurRadius: 14, offset: Offset(0, 5)),
+      ],
+    ),
+    child: Icon(Icons.play_arrow_rounded, color: Colors.white, size: size * .62),
+  );
 }
 
 class _MediaSearch extends SearchDelegate<MediaItem?> {
